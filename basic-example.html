@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Creador de Diagramas</title>    
+    <link href="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/css/jsplumbtoolkit-defaults.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/js/jsplumb.min.js"></script>    
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 300px;
+            height: 100vh;
+            background: #f0f0f0;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+
+        .shape-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #fff;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .shape-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .canvas-container {
+            margin-left: 220px;
+            height: 100vh;
+            position: relative;
+            background: #f9f9f9;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .shape {
+            position: absolute;
+            width: 120px;
+            height: 80px;
+            background: white;
+            border: 2px solid #2196F3;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: box-shadow 0.3s;
+        }
+
+        .shape:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .circle {
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+        }
+
+        .square {
+            width: 100px;
+            height: 100px;
+        }
+
+        .diamond {
+            transform: rotate(45deg);
+        }
+
+        .diamond span {
+            transform: rotate(-45deg);
+        }
+
+        .endpoint {
+            width: 10px;
+            height: 10px;
+            background: #2196F3;
+            border-radius: 50%;
+        }
+
+        .controls {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+        }
+
+        .delete-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .shape-text {
+            font-size: 14px;
+            color: #333;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Formas</h2>
+        <button class="shape-btn" data-shape="rectangle">Rectángulo</button>
+        <button class="shape-btn" data-shape="circle">Círculo</button>
+        <button class="shape-btn" data-shape="square">Cuadrado</button>
+        <button class="shape-btn" data-shape="diamond">Rombo</button>
+        <div class="controls">            
+            <ul>
+                <li>Arrastra para mover</li>
+                <li>Conecta desde los puntos azules</li>
+                <li>Doble clic en conexión para eliminar</li>
+            </ul>
+            <button id="delete-selected" class="delete-btn">Eliminar Seleccionado</button>
+        </div>
+    </div>
+    <div class="canvas-container" id="canvas"></div>
+
+    <script>
+        let selectedShape = null;
+        let shapeCounter = 1;
+        const instance = jsPlumb.getInstance({
+            DragOptions: { cursor: 'move' },
+            ConnectionOverlays: [
+                ['Arrow', {
+                    location: 1,
+                    width: 10,
+                    length: 10
+                }]
+            ],
+            Connector: ['Bezier', { curviness: 50 }],
+            PaintStyle: { 
+                strokeWidth: 2, 
+                stroke: '#2196F3',
+                outlineStroke: 'transparent',
+                outlineWidth: 4
+            },
+            HoverPaintStyle: { 
+                stroke: '#1976D2',
+                strokeWidth: 3
+            },
+            EndpointStyle: { 
+                fill: '#2196F3',
+                stroke: '#2196F3'
+            },
+            EndpointHoverStyle: { 
+                fill: '#1976D2'
+            }
+        });
+
+        jsPlumb.ready(function() {
+            instance.setContainer(document.getElementById('canvas'));
+        });
+
+        function createEndpoints(el) {
+            const endpoints = [
+                { anchor: 'Top', uuid: el.id + '_top' },
+                { anchor: 'Right', uuid: el.id + '_right' },
+                { anchor: 'Bottom', uuid: el.id + '_bottom' },
+                { anchor: 'Left', uuid: el.id + '_left' }
+            ];
+
+            endpoints.forEach(ep => {
+                instance.addEndpoint(el, {
+                    uuid: ep.uuid,
+                    anchor: ep.anchor,
+                    maxConnections: -1,
+                    endpoint: ['Dot', { radius: 5 }],
+                    isSource: true,
+                    isTarget: true,
+                    cssClass: 'endpoint'
+                });
+            });
+        }
+
+        document.querySelectorAll('.shape-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const shapeType = btn.dataset.shape;
+                createShape(shapeType);
+            });
+        });
+
+        function createShape(type) {
+            const shape = document.createElement('div');
+            shape.className = `shape ${type}`;
+            shape.id = `shape_${shapeCounter}`;
+            
+            const text = document.createElement('span');
+            text.className = 'shape-text';
+            text.textContent = `Forma ${shapeCounter}`;
+            if (type === 'diamond') {
+                text.style.transform = 'rotate(-45deg)';
+            }
+            shape.appendChild(text);
+
+            shape.style.left = '250px';
+            shape.style.top = '100px';
+
+            document.getElementById('canvas').appendChild(shape);
+            
+            instance.draggable(shape, {
+                containment: true,
+                grid: [10, 10]
+            });
+
+            createEndpoints(shape);
+
+            shape.addEventListener('click', (e) => {
+                if (selectedShape) {
+                    selectedShape.style.border = '2px solid #2196F3';
+                }
+                selectedShape = shape;
+                shape.style.border = '2px solid #ff4444';
+                e.stopPropagation();
+            });
+
+            shapeCounter++;
+        }
+
+        document.getElementById('delete-selected').addEventListener('click', () => {
+            if (selectedShape) {
+                instance.remove(selectedShape);
+                selectedShape = null;
+            }
+        });
+
+        document.getElementById('canvas').addEventListener('click', () => {
+            if (selectedShape) {
+                selectedShape.style.border = '2px solid #2196F3';
+                selectedShape = null;
+            }
+        });
+
+        instance.bind('dblclick', (connection) => {
+            instance.deleteConnection(connection);
+        });
+    </script>
+</body>
+</html>
